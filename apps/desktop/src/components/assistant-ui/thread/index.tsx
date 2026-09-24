@@ -185,6 +185,7 @@ export const Thread = memo(function Thread({
           clampToComposer={clampToComposer}
           components={messageComponents}
           emptyPlaceholder={emptyPlaceholder}
+          gateway={gateway}
           loadingIndicator={loadingIndicator}
           scrollProfile={scrollProfile}
           sessionId={sessionId}

@@ -3160,6 +3160,22 @@ export interface ContextFileSource {
   loaded: boolean
   status: string
 }
+export interface SessionContextSnapshotsParams {
+  session_id: string
+  profile?: string | null
+}
+export interface SessionContextSnapshotsResult {
+  snapshots: ContextSnapshot[]
+}
+export interface ContextSnapshot {
+  request_id: string
+  user_row_id?: number | null
+  user_text?: string
+  blocks?: Record<string, string>[]
+  request: string
+  truncated?: boolean
+  redacted?: boolean
+}
 export interface SessionCompressParams {
   session_id: string
   profile?: string | null
@@ -4976,6 +4992,8 @@ export interface RpcMethods {
   'session.compress': { params: SessionCompressParams; result: SessionCompressResult }
   /** Cursor-style split of the context window by category. */
   'session.context_breakdown': { params: SessionContextBreakdownParams; result: SessionContextBreakdownResult }
+  /** Read redacted, captured model requests for this authorized session (Desktop only). */
+  'session.context_snapshots': { params: SessionContextSnapshotsParams; result: SessionContextSnapshotsResult }
   /** Run one allowlisted goal / loop / subgoal / heartbeat action and return the exact resulting snapshot. */
   'session.control': { params: SessionControlParams; result: SessionControlResult }
   /** Stable, allowlisted snapshot of one live session's goal / loop / heartbeat state. */
@@ -5280,6 +5298,7 @@ export const RPC_METHODS = [
   'session.close',
   'session.compress',
   'session.context_breakdown',
+  'session.context_snapshots',
   'session.control',
   'session.control.read',
   'session.create',

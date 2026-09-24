@@ -5,6 +5,7 @@ helpers (``_sessions``, ``_ok``, ``_err``, ...) bare; module-level helpers are p
 server.py the same way (tests monkeypatching ``server.X`` still intercept)."""
 
 import contextlib
+from pathlib import Path
 
 from .method_ctx import HandlerRegistry, bind_module
 
@@ -1017,6 +1018,10 @@ def _(rid, params: dict) -> dict:
         try:
             home = Path(profile_home) if profile_home is not None else get_hermes_home()
             deleted = db.delete_session(target, sessions_dir=home / "sessions")
+            if deleted:
+                from agent.request_context_snapshot import _path
+                with contextlib.suppress(OSError):
+                    _path(target, home=home).unlink(missing_ok=True)
         except Exception as e:
             return _err(rid, 5036, f"delete failed: {e}")
     return _ok(rid, {"deleted": target}) if deleted else _err(rid, 4007, "session not found")
@@ -1296,6 +1301,22 @@ def _(rid, params: dict, session: dict) -> dict:
     finally:
         _clear_session_context(tokens)
 
+
+@_session_method("session.context_snapshots")
+def _(rid, params: dict, session: dict) -> dict:
+    """Read only the currently authorized session from its own profile home."""
+    from agent.request_context_snapshot import read_snapshots
+    from hermes_constants import get_hermes_home
+    home = Path(session["profile_home"]) if session.get("profile_home") else get_hermes_home()
+    try:
+        keys = [session["session_key"]]
+        with _session_db(session) as db:
+            if db is not None:
+                keys = db._resume_lineage_ids(session["session_key"]) or keys
+        rows = [row for key in keys for row in read_snapshots(key, home=home)]
+        return _ok(rid, {"snapshots": rows[-256:]})
+    except (OSError, ValueError) as exc:
+        return _err(rid, 5000, f"Could not read context snapshots: {exc}")
 
 # ── pet ──────────────────────────────────────────────────────────────
 _PET_OFF = {"enabled": False}

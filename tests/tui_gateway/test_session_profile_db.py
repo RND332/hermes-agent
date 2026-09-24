@@ -21,6 +21,7 @@ directly would bypass the path the gateway actually executes.
 from __future__ import annotations
 
 import importlib
+import json
 import threading
 import types
 from pathlib import Path
@@ -139,6 +140,43 @@ def _texts(rows):
         out.append(str(content or ""))
     return out
 
+
+# ---------------------------------------------------------------------------
+# Per-request context snapshots: same profile and session only
+# ---------------------------------------------------------------------------
+
+def test_context_snapshots_are_profile_scoped(server, launch_db, profile_db, hermes_home):
+    from agent.request_context_snapshot import _path
+
+    profile_home, pdb = profile_db
+    _register(server, _seed(pdb), profile_home=profile_home)
+    for home, text in ((hermes_home, "wrong profile"), (profile_home, "correct profile")):
+        path = _path(SESSION_KEY, home=home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "request_id": text, "user_row_id": 1, "user_text": "question 1",
+            "blocks": [], "request": "{}", "truncated": False, "redacted": True,
+        }) + "\n")
+    result = _rpc(server, "session.context_snapshots", {"session_id": SESSION_ID})
+    assert "error" not in result, result
+    assert [row["request_id"] for row in result["result"]["snapshots"]] == ["correct profile"]
+
+def test_context_snapshots_follow_compression_lineage(server, launch_db, profile_db):
+    from agent.request_context_snapshot import _path
+
+    profile_home, pdb = profile_db
+    _register(server, _seed(pdb), profile_home=profile_home)["session_key"] = "child-segment"
+    pdb.create_session("child-segment", source="tui", parent_session_id=SESSION_KEY)
+    for key in (SESSION_KEY, "child-segment"):
+        path = _path(key, home=profile_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "request_id": key, "user_row_id": 1, "user_text": "question",
+            "blocks": [], "request": "{}", "truncated": False, "redacted": True,
+        }) + "\n")
+    result = _rpc(server, "session.context_snapshots", {"session_id": SESSION_ID})
+    assert "error" not in result, result
+    assert [row["request_id"] for row in result["result"]["snapshots"]] == [SESSION_KEY, "child-segment"]
 
 # ---------------------------------------------------------------------------
 # /undo — command.dispatch

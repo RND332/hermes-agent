@@ -3049,6 +3049,24 @@
       }
     },
     {
+      "name": "session.context_snapshots",
+      "summary": "Read redacted, captured model requests for this authorized session (Desktop only).",
+      "params": [
+        {
+          "name": "params",
+          "schema": {
+            "$ref": "#/components/schemas/SessionContextSnapshotsParams"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SessionContextSnapshotsResult"
+        }
+      }
+    },
+    {
       "name": "session.control",
       "summary": "Run one allowlisted goal / loop / subgoal / heartbeat action and return the exact resulting snapshot.",
       "params": [
@@ -10827,6 +10845,63 @@
           "status"
         ],
         "title": "ContextFileSource",
+        "type": "object"
+      },
+      "ContextSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "user_row_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "User Row Id"
+          },
+          "user_text": {
+            "default": "",
+            "title": "User Text",
+            "type": "string"
+          },
+          "blocks": {
+            "default": [],
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "request": {
+            "title": "Request",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "redacted": {
+            "default": true,
+            "title": "Redacted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "request_id",
+          "request"
+        ],
+        "title": "ContextSnapshot",
         "type": "object"
       },
       "ControllerScope": {
@@ -28048,6 +28123,49 @@
           "model"
         ],
         "title": "SessionContextBreakdownResult",
+        "type": "object"
+      },
+      "SessionContextSnapshotsParams": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Profile"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "SessionContextSnapshotsParams",
+        "type": "object"
+      },
+      "SessionContextSnapshotsResult": {
+        "additionalProperties": false,
+        "properties": {
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/ContextSnapshot"
+            },
+            "title": "Snapshots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "snapshots"
+        ],
+        "title": "SessionContextSnapshotsResult",
         "type": "object"
       },
       "SessionControlArgs": {

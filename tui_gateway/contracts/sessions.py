@@ -464,6 +464,24 @@ method("session.context_breakdown", params=SessionContextBreakdownParams, result
        doc="Cursor-style split of the context window by category.")
 
 
+class SessionContextSnapshotsParams(SessionParams):
+    pass
+
+class ContextSnapshot(Result):
+    request_id: str
+    user_row_id: int | None = None
+    user_text: str = ""
+    blocks: list[dict[str, str]] = []
+    request: str
+    truncated: bool = False
+    redacted: bool = True
+
+class SessionContextSnapshotsResult(Result):
+    snapshots: list[ContextSnapshot]
+
+method("session.context_snapshots", params=SessionContextSnapshotsParams, result=SessionContextSnapshotsResult,
+       doc="Read redacted, captured model requests for this authorized session (Desktop only).")
+
 # ── compression ───────────────────────────────────────────────────────────────────────────────
 
 

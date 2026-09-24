@@ -160,6 +160,9 @@ def build_api_request(
         api_request_id=api_request_id, api_start_time=api_start_time,
         effective_task_id=effective_task_id, turn_id=turn_id,
     )
+    # Observe the final provider-facing payload, never a reconstructed prompt.
+    from agent.request_context_snapshot import capture_request
+    capture_request(agent, api_kwargs, api_request_id=api_request_id, messages=messages)
 
     if env_var_enabled("HERMES_DUMP_REQUESTS"):
         agent._dump_api_request_debug(api_kwargs, reason="preflight")
