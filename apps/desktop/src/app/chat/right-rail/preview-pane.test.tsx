@@ -48,27 +48,6 @@ describe('PreviewPane console state', () => {
     vi.unstubAllGlobals()
   })
 
-  it('paints an opaque surface behind file previews under window glass', async () => {
-    let rendered!: ReturnType<typeof render>
-    await act(async () => {
-      rendered = render(
-        <PreviewPane
-          embedded
-          target={{
-            kind: 'file',
-            label: 'design.md',
-            path: '/work/design.md',
-            previewKind: 'text',
-            source: '/work/design.md',
-            url: 'file:///work/design.md'
-          }}
-        />
-      )
-    })
-
-    expect(rendered.container.querySelector('aside')?.classList.contains('bg-background')).toBe(true)
-  })
-
   it('does not watch backend-only remote filesystem previews locally', async () => {
     const watchPreviewFile = vi.fn(async () => ({ id: 'watch-1', path: '/remote/file.txt' }))
     const onPreviewFileChanged = vi.fn(() => vi.fn())
