@@ -29,6 +29,10 @@ describe('context snapshot disclosures', () => {
         type: 'function',
         function: { name: 'mcp__slack__channels_list', description: 'List channels', parameters: { type: 'object' } }
       },
+      {
+        type: 'function',
+        function: { name: 'mcp__my_team__users_list', description: 'List users', parameters: { type: 'object' } }
+      },
       { type: 'function', name: 'browser_exec', description: 'Browse', parameters: { type: 'object' } }
     ]
 
@@ -51,6 +55,7 @@ describe('context snapshot disclosures', () => {
     fireEvent.click(screen.getByText('Tools'))
     expect(screen.getByText('functions · 2 tools')).toBeTruthy()
     expect(screen.getByText('slack · 1 tool')).toBeTruthy()
+    expect(screen.getByText('my_team · 1 tool')).toBeTruthy()
     expect(screen.getByText('Built-in · 1 tool')).toBeTruthy()
     fireEvent.click(screen.getByText('Copy'))
     expect(writeText).toHaveBeenCalledWith(JSON.stringify(tools))

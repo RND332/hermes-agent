@@ -30,7 +30,7 @@ function toolGroups(text: string): Map<string, Array<{ label: string; schema: To
       }
 
       const name = schema.name
-      const mcp = name.match(/^mcp__([^_]+)__(.+)$/)
+      const mcp = name.match(/^mcp__(.+?)__(.+)$/)
       const dot = name.indexOf('.')
       const group = mcp ? mcp[1] : dot > 0 ? name.slice(0, dot) : 'Built-in'
       const label = mcp ? mcp[2] : dot > 0 ? name.slice(dot + 1) : name
