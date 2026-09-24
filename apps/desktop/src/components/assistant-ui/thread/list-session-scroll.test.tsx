@@ -1,8 +1,11 @@
 import { AssistantRuntimeProvider, type ThreadMessage, useExternalStoreRuntime } from '@assistant-ui/react'
 import { act, render, waitFor } from '@testing-library/react'
+import { atom } from 'nanostores'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PRIMARY_SESSION_VIEW, SessionViewProvider } from '@/app/chat/session-view'
 import { PaneLifecycleContext, PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
+import type { HermesGateway } from '@/hermes'
 import { rescopeConnectionScopedStores } from '@/lib/connection-scoped'
 import { setActiveProfile } from '@/store/profile'
 import {
@@ -118,6 +121,54 @@ function ScrollHarness({
 }
 
 describe('list session-scroll restore', () => {
+  it('renders a captured context request without crashing the thread runtime', async () => {
+    const gateway = {
+      request: vi.fn().mockResolvedValue({
+        snapshots: [
+          {
+            request_id: 'turn:api:1',
+            user_row_id: 2,
+            user_text: 'message 0 in context',
+            blocks: [{ source: 'System prompt', text: 'Captured instructions' }],
+            request: '{}',
+            truncated: false,
+            redacted: true
+          }
+        ]
+      })
+    } as unknown as HermesGateway
+
+    const messages = sessionMessages('context')
+
+    const runtimeMessages = atom([
+      {
+        id: 'u-context-0',
+        role: 'user' as const,
+        rowId: 2,
+        parts: [{ type: 'text' as const, text: 'message 0 in context' }]
+      }
+    ])
+
+    function ContextHarness() {
+      const runtime = useExternalStoreRuntime<ThreadMessage>({ messages, onNew: async () => {} })
+
+      return (
+        <AssistantRuntimeProvider runtime={runtime}>
+          <SessionViewProvider value={{ ...PRIMARY_SESSION_VIEW, $messages: runtimeMessages }}>
+            <TranscriptWindowProvider value={{ olderAvailable: false, expandWindow: () => {} }}>
+              <Thread gateway={gateway} sessionId="context" sessionKey="context" />
+            </TranscriptWindowProvider>
+          </SessionViewProvider>
+        </AssistantRuntimeProvider>
+      )
+    }
+
+    const { container } = render(<ContextHarness />)
+    await waitFor(() => expect(container.querySelector('[data-slot="context-snapshots"]')).toBeTruthy())
+    expect(container.textContent).toContain('System prompt')
+    expect(gateway.request).toHaveBeenCalledWith('session.context_snapshots', { session_id: 'context' })
+  })
+
   it('lets a reader escape bottom-follow when a running transcript grows during the scroll gesture', async () => {
     // #116273: a pending clarify keeps the turn running while the transcript
     // can still resize. If that resize lands in the same frame as scroll-up,
