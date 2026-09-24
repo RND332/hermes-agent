@@ -25,6 +25,9 @@ export default {
       ${DOCK}:not([data-popped-out]) {
         width: calc(min(var(${WIDTH}, var(--composer-width)), calc(100% - 2rem)) + 10px);
       }
+      [data-slot="aui_thread-content"] {
+        max-width: var(${WIDTH}, var(--composer-width));
+      }
       [data-composer-resize] {
         position: absolute; top: 12px; bottom: 12px; width: 10px; z-index: 10;
         cursor: ew-resize; touch-action: none; user-select: none;

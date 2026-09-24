@@ -8,7 +8,7 @@ let browser, server, url
 const fixture = `<!doctype html><style>
   * {box-sizing:border-box} body {margin:0; --composer-width:100%; --ui-accent:purple}
   [data-chat-surface] {position:relative; width:100%; height:600px}
-  [data-slot="aui_thread-content"] {width:100%; max-width:var(--composer-width)}
+  [data-slot="aui_thread-content"] {width:100%; max-width:var(--composer-width); margin-inline:auto}
   [data-slot="composer-dock"] {position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:calc(min(var(--composer-width), calc(100% - 2rem)) + 10px)}
   [data-slot="composer-dock"][data-popped-out] {width:384px}
   [data-slot="composer-root"] {position:relative; padding:0 5px}
@@ -66,7 +66,7 @@ async function drag(page, side, dx) {
 }
 const near = (a, b) => assert.ok(Math.abs(a - b) < 2, `${a} should equal ${b}`)
 
-test('dragging the right edge shrinks around the center without resizing the transcript or losing the draft', async () => {
+test('dragging the right edge resizes the centered transcript and input together without losing the draft', async () => {
   const page = await open()
   try {
     const before = await page.locator(dock).boundingBox()
@@ -75,7 +75,10 @@ test('dragging the right edge shrinks around the center without resizing the tra
     const after = await page.locator(dock).boundingBox()
     near(after.width, before.width - 240)
     near(after.x + after.width / 2, before.x + before.width / 2)
-    assert.deepEqual(await page.locator('[data-slot="aui_thread-content"]').boundingBox(), thread)
+    const resizedThread = await page.locator('[data-slot="aui_thread-content"]').boundingBox()
+    assert.ok(resizedThread.width < thread.width)
+    near(resizedThread.width, after.width - 10)
+    near(resizedThread.x + resizedThread.width / 2, after.x + after.width / 2)
     assert.equal(await page.locator('textarea').inputValue(), 'Unsent draft')
   } finally { await page.close() }
 })
@@ -84,10 +87,12 @@ test('disable removes handles and restores the original width', async () => {
   const page = await open()
   try {
     const initial = await page.locator(dock).boundingBox()
+    const initialThread = await page.locator('[data-slot="aui_thread-content"]').boundingBox()
     await drag(page, 'left', 100)
     await page.evaluate(() => window.dispose())
     assert.equal(await page.locator('[data-composer-resize]').count(), 0)
     near((await page.locator(dock).boundingBox()).width, initial.width)
+    near((await page.locator('[data-slot="aui_thread-content"]').boundingBox()).width, initialThread.width)
   } finally { await page.close() }
 })
 
@@ -98,12 +103,15 @@ test('left-edge resizing persists after reload and double-click resets it', asyn
     await drag(page, 'left', 100)
     const resized = await page.locator(dock).boundingBox()
     near(resized.width, initial.width - 200)
+    near((await page.locator('[data-slot="aui_thread-content"]').boundingBox()).width, resized.width - 10)
     await page.reload(); await page.waitForFunction(() => window.ready)
     near((await page.locator(dock).boundingBox()).width, resized.width)
+    near((await page.locator('[data-slot="aui_thread-content"]').boundingBox()).width, resized.width - 10)
     await page.locator(handle('left')).dblclick()
     near((await page.locator(dock).boundingBox()).width, initial.width)
     await page.reload(); await page.waitForFunction(() => window.ready)
     near((await page.locator(dock).boundingBox()).width, initial.width)
+    near((await page.locator('[data-slot="aui_thread-content"]').boundingBox()).width, 1200)
   } finally { await page.close() }
 })
 
