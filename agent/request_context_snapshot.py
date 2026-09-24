@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -42,12 +43,38 @@ def _model_text(value: Any) -> str:
     return ""
 
 
+def _system_blocks(content: str) -> list[dict[str, str]]:
+    """Label sections only when their bytes occur in the outbound prompt."""
+    result = []
+    soul_path = get_hermes_home() / "SOUL.md"
+    if soul_path.is_file():
+        soul = soul_path.read_text(encoding="utf-8").strip()
+        if soul and content.startswith(soul):
+            result.append({"source": "SOUL.md", "text": _safe_text(soul)})
+            content = content[len(soul):]
+    memory = re.search(r"\n\n(?=═+\nMEMORY \(|# Hindsight Memory(?:\n|$))", content)
+    if memory:
+        prefix, content = content[:memory.start()], content[memory.start():]
+        if prefix.strip():
+            result.append({"source": "System prompt", "text": _safe_text(prefix)})
+        end = content.find("\n\n# Hermes runtime environment")
+        if end >= 0:
+            result.append({"source": "Memory", "text": _safe_text(content[:end])})
+            content = content[end:]
+        else:
+            result.append({"source": "Memory", "text": _safe_text(content)})
+            content = ""
+    if content.strip():
+        result.append({"source": "System prompt", "text": _safe_text(content)})
+    return result
+
+
 def _blocks(payload: dict, user: dict | None = None) -> list[dict[str, str]]:
     """All non-chat content, extracted from the *post-middleware* request."""
     blocks: list[dict[str, str]] = []
     system = payload.get("instructions") or payload.get("system")
     if system:
-        blocks.append({"source": "System prompt", "text": _safe_text(_model_text(system))})
+        blocks.extend(_system_blocks(_model_text(system)))
     messages = payload.get("messages") or payload.get("input") or []
     for message in messages if isinstance(messages, list) else []:
         if not isinstance(message, dict):
@@ -55,7 +82,7 @@ def _blocks(payload: dict, user: dict | None = None) -> list[dict[str, str]]:
         role = message.get("role")
         content = _model_text(message.get("content"))
         if role in ("system", "developer"):
-            blocks.append({"source": "System prompt" if role == "system" else "Developer context", "text": _safe_text(content)})
+            blocks.extend(_system_blocks(content) if role == "system" else [{"source": "Developer context", "text": _safe_text(content)}])
     # Only the *current* user's delta is an injection. Historical user turns
     # already have their own cards; don't replay them on every tool iteration.
     current = next((m for m in reversed(messages) if isinstance(m, dict) and m.get("role") == "user"), None) if isinstance(messages, list) else None

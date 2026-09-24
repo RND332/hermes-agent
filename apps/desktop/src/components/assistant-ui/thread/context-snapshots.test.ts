@@ -29,14 +29,14 @@ describe('context snapshot attribution', () => {
     expect(assigned.has('one')).toBe(false)
   })
 
-  it('shows system and tools only when their actual captured bytes change', () => {
+  it('shows the captured system and memory for each turn, including unchanged repeats', () => {
     const first = snapshot(12, 'one')
-    first.blocks = [{ source: 'System prompt', text: 'soul' }, { source: 'Tools', text: '[]' }]
+    first.blocks = [{ source: 'System prompt', text: 'soul' }, { source: 'Memory', text: 'context' }, { source: 'Tools', text: '[]' }]
     const second = snapshot(14, 'two')
     second.blocks = [...first.blocks]
     const assigned = assignContextSnapshots([user('one', 12, 'one'), user('two', 14, 'two')], [first, second])
-    expect(assigned.get('one')?.[0]?.blocks).toHaveLength(2)
-    expect(assigned.get('two')?.[0]?.blocks).toHaveLength(0)
+    expect(assigned.get('one')?.[0]?.blocks).toHaveLength(3)
+    expect(assigned.get('two')?.[0]?.blocks).toEqual(first.blocks)
   })
 
   it('matches a unique optimistic user turn by exact text', () => {

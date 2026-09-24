@@ -49,6 +49,25 @@ def test_request_assembly_captures_post_middleware_payload(tmp_path, monkeypatch
     assert rows[0]["user_row_id"] == 12
 
 
+def test_captured_system_prompt_labels_exact_soul_and_memory_sections(tmp_path, monkeypatch):
+    soul = "Original SOUL\n\nAppended OMP rules"
+    (tmp_path / "SOUL.md").write_text(soul)
+    monkeypatch.setattr(context, "get_hermes_home", lambda: tmp_path)
+    system = (soul + "\n\nOther system instructions\n\n"
+              "══════════════\nMEMORY (your personal notes) [20%]\n══════════════\nPersonal note\n\n"
+              "# Hindsight Memory\nRelevant memories are automatically injected.\n\n"
+              "# Hindsight knowledge pages (index only)\n- workflow editor\n\n"
+              "# Hermes runtime environment\nHost: Linux")
+    blocks = context._blocks({"instructions": system})
+    assert [block["source"] for block in blocks] == ["SOUL.md", "System prompt", "Memory", "System prompt"]
+    assert blocks[0]["text"] == soul
+    assert "workflow editor" in blocks[2]["text"]
+    assert "MEMORY" not in blocks[1]["text"]
+    assert "Host: Linux" in blocks[3]["text"]
+    via_messages = context._blocks({"messages": [{"role": "system", "content": system}]})
+    assert via_messages == blocks
+
+
 def test_captures_final_request_and_scopes_to_session(tmp_path, monkeypatch):
     original_path = context._path
     path = original_path("session-a", home=tmp_path)
