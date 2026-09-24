@@ -155,11 +155,29 @@ def test_context_snapshots_are_profile_scoped(server, launch_db, profile_db, her
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({
             "request_id": text, "user_row_id": 1, "user_text": "question 1",
-            "blocks": [], "request": "{}", "truncated": False, "redacted": True,
+            "blocks": [{"source": "System prompt", "text": text * 5000}],
+            "request": text * 30000, "truncated": False, "redacted": True,
         }) + "\n")
     result = _rpc(server, "session.context_snapshots", {"session_id": SESSION_ID})
     assert "error" not in result, result
     assert [row["request_id"] for row in result["result"]["snapshots"]] == ["correct profile"]
+    assert len(json.dumps(result)) < 2000  # Polls never carry diagnostic bodies.
+    summary = result["result"]["snapshots"][0]
+    assert summary["blocks"][0]["fingerprint"]
+    assert summary["blocks"][0]["text"] == summary["request"] == ""
+    unchanged = _rpc(server, "session.context_snapshots", {
+        "session_id": SESSION_ID, "revision": result["result"]["revision"],
+    })
+    assert unchanged["result"]["snapshots"] == []
+    assert unchanged["result"]["unchanged"] is True
+    detail = _rpc(server, "session.context_snapshots", {
+        "session_id": SESSION_ID, "request_id": "correct profile",
+    })
+    assert detail["result"]["snapshots"][0]["request"] == "correct profile" * 30000
+    foreign = _rpc(server, "session.context_snapshots", {
+        "session_id": SESSION_ID, "request_id": "wrong profile",
+    })
+    assert foreign["result"]["snapshots"] == []
 
 def test_context_snapshots_follow_compression_lineage(server, launch_db, profile_db):
     from agent.request_context_snapshot import _path

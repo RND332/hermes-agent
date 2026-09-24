@@ -19,11 +19,11 @@ import { type GetTargetScrollTop, useStickToBottom } from 'use-stick-to-bottom'
 
 import { useComposerSurfaceId } from '@/app/chat/composer/scope'
 import { useSessionView } from '@/app/chat/session-view'
-import type { HermesGateway } from '@/hermes'
-import { useStoreSelector } from '@/lib/use-session-slice'
 import { usePaneLifecycle, usePaneVisible } from '@/components/pane-shell/pane-visibility'
+import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { messagePaintWeight } from '@/lib/render-weight'
+import { useStoreSelector } from '@/lib/use-session-slice'
 import { cn } from '@/lib/utils'
 import {
   getThreadScrollPosition,
@@ -47,10 +47,11 @@ import { isSecondaryWindow } from '@/store/windows'
 import { MessageRenderBoundary } from '../message-render-boundary'
 import { PendingApprovalStack } from '../tool/approval'
 
-import { ContextSnapshotRows } from './context-snapshot-rows'
+import { ContextSnapshotRows, type SnapshotLoader } from './context-snapshot-rows'
 import { assignContextSnapshots, type ContextSnapshot } from './context-snapshots'
 import { responseMessageRole, ResponseMessages } from './response-group'
 import { resolveShowEarlierAction, shouldAutoShowEarlier, useTranscriptWindow } from './transcript-window'
+import { useContextSnapshots } from './use-context-snapshots'
 import { useMessagesBelow } from './use-messages-below'
 import { useStickyPromptClip } from './use-sticky-prompt-clip'
 import { useTimelineReveal } from './use-timeline-reveal'
@@ -412,6 +413,7 @@ interface TurnRowProps {
   components: ThreadMessageComponents
   group: MessageGroup
   snapshots?: readonly ContextSnapshot[]
+  loadSnapshot?: SnapshotLoader
   resetKey: string
   virtualized: boolean
 }
@@ -438,7 +440,14 @@ interface TurnRowProps {
 // The live tail (newest turns) is exempt: virtualizing a turn whose final
 // size hasn't been remembered yet snaps it to a stale height when it scrolls
 // off, drifting stick-to-bottom up over old turns. See liveTailStart.
-const TurnRow = memo(function TurnRow({ components, group, snapshots, resetKey, virtualized }: TurnRowProps) {
+const TurnRow = memo(function TurnRow({
+  components,
+  group,
+  snapshots,
+  loadSnapshot,
+  resetKey,
+  virtualized
+}: TurnRowProps) {
   return (
     <div
       className={cn(
@@ -456,7 +465,7 @@ const TurnRow = memo(function TurnRow({ components, group, snapshots, resetKey, 
             {snapshots?.length ? (
               <>
                 <ThreadPrimitive.MessageByIndex components={components} index={group.indices[0]!} />
-                <ContextSnapshotRows snapshots={snapshots} />
+                <ContextSnapshotRows loadSnapshot={loadSnapshot} snapshots={snapshots} />
                 <ResponseMessages components={components} indices={group.indices.slice(1)} />
               </>
             ) : (
@@ -606,41 +615,23 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
   const jumpRestoreRef = useRef<(() => void) | null>(null)
   const isRunning = useAuiState(s => s.thread.isRunning)
   const sessionView = useSessionView()
+
   const userRowsSignature = useStoreSelector(sessionView.$messages, messages =>
-    messages.filter(message => message.role === 'user').map(message => `${message.id}:${message.rowId ?? ''}`).join('\n')
+    messages
+      .filter(message => message.role === 'user')
+      .map(message => `${message.id}:${message.rowId ?? ''}`)
+      .join('\n')
   )
-  const [contextCapture, setContextCapture] = useState<{ sessionId: string; snapshots: ContextSnapshot[] } | null>(null)
-  useEffect(() => {
-    if (!gateway || !sessionId || !paneVisible) return
-    let cancelled = false
-    const refresh = () => {
-      void gateway.request<{ snapshots: ContextSnapshot[] }>('session.context_snapshots', { session_id: sessionId })
-        .then(result => {
-          if (cancelled || !Array.isArray(result.snapshots)) return
-          setContextCapture(previous => {
-            const current = previous?.sessionId === sessionId ? previous.snapshots : []
-            const next = result.snapshots
-            return current.length === next.length && current.at(-1)?.request_id === next.at(-1)?.request_id
-              ? previous
-              : { sessionId, snapshots: next }
-          })
-        })
-        .catch(() => undefined) // Older backends: no simulated cards from config.
-    }
-    refresh()
-    const poll = isRunning ? window.setInterval(refresh, 2500) : undefined
-    return () => {
-      cancelled = true
-      if (poll !== undefined) window.clearInterval(poll)
-    }
-  }, [gateway, isRunning, paneVisible, sessionId])
-  const snapshots = contextCapture?.sessionId === sessionId ? contextCapture.snapshots : []
+
+  const { snapshots, loadSnapshot } = useContextSnapshots(gateway, sessionId, paneVisible, isRunning)
+
   const snapshotsByUser = useMemo(
     () => assignContextSnapshots(sessionView.$messages.get(), snapshots),
     // User ids / durable row ids, not streaming assistant deltas, drive attribution.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionView, userRowsSignature, snapshots]
   )
+
   // Session the settle loop last armed for, so a re-arm within the same load
   // is distinguishable from a switch to a different transcript.
   const settleKeyRef = useRef(sessionKey)
@@ -1474,12 +1465,13 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
           components={components}
           group={group}
           key={group.id}
-          snapshots={snapshotsByUser.get(group.id)}
+          loadSnapshot={loadSnapshot}
           resetKey={structuralSignature}
+          snapshots={snapshotsByUser.get(group.id)}
           virtualized={indexInVisible < tailStart}
         />
       )),
-    [visibleGroups, components, structuralSignature, tailStart, snapshotsByUser]
+    [visibleGroups, components, structuralSignature, tailStart, snapshotsByUser, loadSnapshot]
   )
 
   useMessagesBelow({ contentRef, scrollRef, isAtBottom, paneVisible, rows, sessionKey, sessionId: scrollSessionId })
@@ -1530,7 +1522,9 @@ const ThreadMessageListInner: FC<ThreadMessageListProps> = ({
             </button>
           )}
           {!renderEmpty && snapshots.length >= 256 && (
-            <p className="mb-2 text-xs text-muted-foreground">Context inspector shows the latest 256 model requests; older captures may be omitted.</p>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Context inspector shows the latest 256 model requests; older captures may be omitted.
+            </p>
           )}
           {renderEmpty ? (
             <div className="grid flex-1 grid-rows-[minmax(0,1fr)_auto] gap-(--conversation-turn-gap)">

@@ -1305,7 +1305,7 @@ def _(rid, params: dict, session: dict) -> dict:
 @_session_method("session.context_snapshots")
 def _(rid, params: dict, session: dict) -> dict:
     """Read only the currently authorized session from its own profile home."""
-    from agent.request_context_snapshot import read_snapshots
+    from agent.request_context_index import snapshot_response
     from hermes_constants import get_hermes_home
     home = Path(session["profile_home"]) if session.get("profile_home") else get_hermes_home()
     try:
@@ -1313,8 +1313,9 @@ def _(rid, params: dict, session: dict) -> dict:
         with _session_db(session) as db:
             if db is not None:
                 keys = db._resume_lineage_ids(session["session_key"]) or keys
-        rows = [row for key in keys for row in read_snapshots(key, home=home)]
-        return _ok(rid, {"snapshots": rows[-256:]})
+        return _ok(rid, snapshot_response(
+            keys, home=home, revision=params.get("revision"), request_id=params.get("request_id"),
+        ))
     except (OSError, ValueError) as exc:
         return _err(rid, 5000, f"Could not read context snapshots: {exc}")
 

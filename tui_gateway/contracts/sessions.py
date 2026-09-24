@@ -465,7 +465,8 @@ method("session.context_breakdown", params=SessionContextBreakdownParams, result
 
 
 class SessionContextSnapshotsParams(SessionParams):
-    pass
+    revision: str | None = None
+    request_id: str | None = None
 
 class ContextSnapshot(Result):
     request_id: str
@@ -478,9 +479,11 @@ class ContextSnapshot(Result):
 
 class SessionContextSnapshotsResult(Result):
     snapshots: list[ContextSnapshot]
+    revision: str
+    unchanged: bool
 
 method("session.context_snapshots", params=SessionContextSnapshotsParams, result=SessionContextSnapshotsResult,
-       doc="Read redacted, captured model requests for this authorized session (Desktop only).")
+       doc="Poll a lightweight capture index; pass revision for unchanged replies or request_id to load one full capture.")
 
 # ── compression ───────────────────────────────────────────────────────────────────────────────
 

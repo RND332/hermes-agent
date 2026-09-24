@@ -3050,7 +3050,7 @@
     },
     {
       "name": "session.context_snapshots",
-      "summary": "Read redacted, captured model requests for this authorized session (Desktop only).",
+      "summary": "Poll a lightweight capture index; pass revision for unchanged replies or request_id to load one full capture.",
       "params": [
         {
           "name": "params",
@@ -28143,6 +28143,30 @@
             ],
             "default": null,
             "title": "Profile"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Revision"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Request Id"
           }
         },
         "required": [
@@ -28160,10 +28184,20 @@
             },
             "title": "Snapshots",
             "type": "array"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "boolean"
           }
         },
         "required": [
-          "snapshots"
+          "snapshots",
+          "revision",
+          "unchanged"
         ],
         "title": "SessionContextSnapshotsResult",
         "type": "object"

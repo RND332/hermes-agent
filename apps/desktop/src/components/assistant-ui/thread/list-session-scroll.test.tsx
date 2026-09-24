@@ -166,7 +166,7 @@ describe('list session-scroll restore', () => {
     const { container } = render(<ContextHarness />)
     await waitFor(() => expect(container.querySelector('[data-slot="context-snapshots"]')).toBeTruthy())
     expect(container.textContent).toContain('System prompt')
-    expect(gateway.request).toHaveBeenCalledWith('session.context_snapshots', { session_id: 'context' })
+    expect(gateway.request).toHaveBeenCalledWith('session.context_snapshots', { session_id: 'context', revision: '' })
   })
 
   it('lets a reader escape bottom-follow when a running transcript grows during the scroll gesture', async () => {

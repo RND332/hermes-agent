@@ -1,9 +1,62 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ContextSnapshotRows } from './context-snapshot-rows'
+import type { ContextSnapshot } from './context-snapshots'
 
 describe('context snapshot disclosures', () => {
+  it('fetches one capture only when expanded and shares it across its disclosures', async () => {
+    const summary = {
+      request_id: 'lazy:1',
+      user_row_id: 1,
+      user_text: 'hello',
+      request: '',
+      blocks: [
+        { source: 'System prompt', text: '', fingerprint: 'system' },
+        { source: 'Memory', text: '', fingerprint: 'memory' }
+      ],
+      truncated: false,
+      redacted: true
+    }
+
+    const loadSnapshot = vi.fn().mockResolvedValue({
+      ...summary,
+      request: 'raw body',
+      blocks: [
+        { source: 'System prompt', text: 'loaded system' },
+        { source: 'Memory', text: 'loaded memory' }
+      ]
+    })
+
+    render(<ContextSnapshotRows loadSnapshot={loadSnapshot} snapshots={[summary]} />)
+    expect(loadSnapshot).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('Model requests (1)'))
+    expect(loadSnapshot).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('System prompt'))
+    expect(await screen.findByText('loaded system')).toBeTruthy()
+    fireEvent.click(screen.getByText('Memory'))
+    expect(await screen.findByText('loaded memory')).toBeTruthy()
+    fireEvent.click(screen.getByText('lazy:1'))
+    expect(await screen.findByText('raw body')).toBeTruthy()
+    expect(loadSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reopen a disclosure closed while its capture was loading', async () => {
+    let resolve!: (value: ContextSnapshot) => void
+    const loadSnapshot = vi.fn(() => new Promise<ContextSnapshot>(r => { resolve = r }))
+    const summary = { request_id: 'slow', user_row_id: 1, user_text: '', request: '', blocks: [], redacted: true, truncated: false }
+    render(<ContextSnapshotRows loadSnapshot={loadSnapshot} snapshots={[summary]} />)
+    fireEvent.click(screen.getByText('Model requests (1)'))
+    const details = screen.getByText('slow').closest('details')!
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    expect(loadSnapshot).toHaveBeenCalledTimes(1)
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    await act(async () => resolve({ ...summary, request: 'loaded' }))
+    expect(screen.getByText('slow').closest('details')?.open).toBe(false)
+  })
+
   it('groups captured tools by namespace and lets each schema expand independently', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

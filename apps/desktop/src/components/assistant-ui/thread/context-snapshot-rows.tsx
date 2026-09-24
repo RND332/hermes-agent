@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import type { ContextSnapshot } from './context-snapshots'
 
@@ -45,15 +45,18 @@ function toolGroups(text: string): Map<string, Array<{ label: string; schema: To
   }
 }
 
-function ToolsDisclosure({ text }: { text: string }) {
+function ToolsDisclosure({ text, initiallyOpen = false }: { text: string; initiallyOpen?: boolean }) {
   const groups = toolGroups(text)
 
   if (!groups) {
-    return <Disclosure text={text} title="Tools" />
+    return <Disclosure initiallyOpen={initiallyOpen} text={text} title="Tools" />
   }
 
   return (
-    <details className="rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground">
+    <details
+      className="rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground"
+      open={initiallyOpen}
+    >
       <summary className="cursor-pointer select-none font-medium text-foreground">Tools</summary>
       <div className="mt-2 flex justify-end">
         <button
@@ -96,9 +99,12 @@ function ToolsDisclosure({ text }: { text: string }) {
   )
 }
 
-function Disclosure({ title, text }: { title: string; text: string }) {
+function Disclosure({ title, text, initiallyOpen = false }: { title: string; text: string; initiallyOpen?: boolean }) {
   return (
-    <details className="rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground">
+    <details
+      className="rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground"
+      open={initiallyOpen}
+    >
       <summary className="cursor-pointer select-none font-medium text-foreground">{title}</summary>
       <div className="mt-2 flex justify-end">
         <button
@@ -114,16 +120,111 @@ function Disclosure({ title, text }: { title: string; text: string }) {
   )
 }
 
+export type SnapshotLoader = (requestId: string) => Promise<ContextSnapshot | undefined>
+
+function LazyDisclosure({ title, loadText }: { title: string; loadText: () => Promise<string> }) {
+  const [text, setText] = useState<string>()
+  const [error, setError] = useState(false)
+  const [open, setOpen] = useState(false)
+  const pending = useRef(false)
+
+  const load = async () => {
+    if (pending.current) {
+      return
+    }
+
+    pending.current = true
+    setError(false)
+
+    try {
+      setText(await loadText())
+    } catch {
+      setError(true)
+    } finally {
+      pending.current = false
+    }
+  }
+
+  if (text !== undefined) {
+    return title === 'Tools' ? (
+      <ToolsDisclosure initiallyOpen={open} text={text} />
+    ) : (
+      <Disclosure initiallyOpen={open} text={text} title={title} />
+    )
+  }
+
+  return (
+    <details
+      className="rounded-lg border border-border/60 bg-card/60 px-3 py-2 text-xs text-muted-foreground"
+      onToggle={event => {
+        setOpen(event.currentTarget.open)
+
+        if (event.currentTarget.open) {
+          void load()
+        }
+      }}
+    >
+      <summary className="cursor-pointer select-none font-medium text-foreground">{title}</summary>
+      {error ? (
+        <button onClick={() => void load()} type="button">
+          Could not load capture. Retry
+        </button>
+      ) : (
+        <p>Loading…</p>
+      )}
+    </details>
+  )
+}
+
 /** Captures are display-only; details never alter the transcript or prompt. */
-export function ContextSnapshotRows({ snapshots }: { snapshots: readonly ContextSnapshot[] }) {
+export function ContextSnapshotRows({
+  snapshots,
+  loadSnapshot
+}: {
+  snapshots: readonly ContextSnapshot[]
+  loadSnapshot?: SnapshotLoader
+}) {
   const [showRequests, setShowRequests] = useState(false)
+
+  // Share an explicit read across a capture's disclosures, not across owners.
+  // Keep only a small recent detail cache rather than recreating the history payload.
+  const load = useMemo(() => {
+    const details = new Map<string, Promise<ContextSnapshot>>()
+
+    return (requestId: string) => {
+      let pending = details.get(requestId)
+
+      if (!pending) {
+        pending = Promise.resolve(loadSnapshot?.(requestId))
+          .then(snapshot => {
+            if (!snapshot) {
+              throw new Error('Capture unavailable')
+            }
+
+            return snapshot
+          })
+          .catch(error => {
+            details.delete(requestId)
+            throw error
+          })
+        details.set(requestId, pending)
+
+        if (details.size > 8) {
+          details.delete(details.keys().next().value!)
+        }
+      }
+
+      return pending
+    }
+  }, [loadSnapshot])
+
   const seen = new Set<string>()
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5" data-slot="context-snapshots">
       {snapshots.flatMap(snapshot =>
-        snapshot.blocks.flatMap(block => {
-          const key = `${block.source}\u0000${block.text}`
+        snapshot.blocks.flatMap((block, blockIndex) => {
+          const key = `${block.source}\u0000${block.fingerprint ?? block.text}`
 
           if (seen.has(key)) {
             return []
@@ -132,7 +233,13 @@ export function ContextSnapshotRows({ snapshots }: { snapshots: readonly Context
           seen.add(key)
 
           return [
-            block.source === 'Tools' ? (
+            block.fingerprint ? (
+              <LazyDisclosure
+                key={key}
+                loadText={async () => (await load(snapshot.request_id)).blocks[blockIndex]?.text ?? ''}
+                title={block.source}
+              />
+            ) : block.source === 'Tools' ? (
               <ToolsDisclosure key={`${snapshot.request_id}-${key}`} text={block.text} />
             ) : (
               <Disclosure key={`${snapshot.request_id}-${key}`} text={block.text} title={block.source} />
@@ -153,9 +260,9 @@ export function ContextSnapshotRows({ snapshots }: { snapshots: readonly Context
             Local diagnostic · secrets masked; redacted text differs from what the model received.
           </p>
           {snapshots.map(snapshot => (
-            <Disclosure
+            <LazyDisclosure
               key={snapshot.request_id}
-              text={snapshot.request}
+              loadText={async () => snapshot.request || (await load(snapshot.request_id)).request}
               title={`${snapshot.request_id}${snapshot.truncated ? ' · truncated' : ''}`}
             />
           ))}

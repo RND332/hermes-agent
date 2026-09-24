@@ -3163,9 +3163,13 @@ export interface ContextFileSource {
 export interface SessionContextSnapshotsParams {
   session_id: string
   profile?: string | null
+  revision?: string | null
+  request_id?: string | null
 }
 export interface SessionContextSnapshotsResult {
   snapshots: ContextSnapshot[]
+  revision: string
+  unchanged: boolean
 }
 export interface ContextSnapshot {
   request_id: string
@@ -4992,7 +4996,7 @@ export interface RpcMethods {
   'session.compress': { params: SessionCompressParams; result: SessionCompressResult }
   /** Cursor-style split of the context window by category. */
   'session.context_breakdown': { params: SessionContextBreakdownParams; result: SessionContextBreakdownResult }
-  /** Read redacted, captured model requests for this authorized session (Desktop only). */
+  /** Poll a lightweight capture index; pass revision for unchanged replies or request_id to load one full capture. */
   'session.context_snapshots': { params: SessionContextSnapshotsParams; result: SessionContextSnapshotsResult }
   /** Run one allowlisted goal / loop / subgoal / heartbeat action and return the exact resulting snapshot. */
   'session.control': { params: SessionControlParams; result: SessionControlResult }
