@@ -70,7 +70,7 @@ import type { ChatBarState } from './composer/types'
 import { useHistoryWindow } from './history-window'
 import { type DroppedFile, partitionDroppedFiles } from './hooks/use-composer-actions'
 import { type DragKind, useFileDropZone } from './hooks/use-file-drop-zone'
-import { shouldShowIntro } from './intro-visibility'
+import { isFreshPrimaryDraft, shouldShowIntro } from './intro-visibility'
 import { ProfileTag } from './profile-tag'
 import { ResumeExhaustedOverlay } from './resume-exhausted-overlay'
 import { isRouteSessionMismatch } from './route-session-state'
@@ -624,19 +624,19 @@ const ChatViewContent = memo(function ChatViewContent({
       })
     : false
 
-  // The compact new-session pop-out skips the wordmark/tagline intro — it's a
-  // scratch window, not the full-height empty state. The Appearance toggle
-  // turns it off everywhere else.
-  const showIntro = shouldShowIntro({
+  // Fresh-draft layout is independent of the optional intro copy. Once the
+  // first message binds a session, the same composer docks without remounting.
+  const introEligibility = {
     activeSessionId,
     auxiliaryWindow: isAuxiliaryWindow(),
-    enabled: introSplash,
     freshDraftReady,
     messagesEmpty,
     primary: isPrimary,
     routedSessionView: isRoutedSessionView,
     selectedSessionId
-  })
+  }
+  const freshDraft = isFreshPrimaryDraft(introEligibility)
+  const showIntro = shouldShowIntro({ ...introEligibility, enabled: introSplash })
 
   // Session is still loading if the route references a session we haven't
   // resumed yet. Brand-new routed drafts are empty on purpose once a runtime
@@ -795,6 +795,7 @@ const ChatViewContent = memo(function ChatViewContent({
         className
       )}
       data-chat-surface=""
+      data-fresh-draft={freshDraft ? '' : undefined}
       data-chat-unfocused={surfaceFocused || surfaceHovered ? undefined : ''}
       data-composer-surface-id={composerSurfaceId}
       data-composer-target={composerScope.target}

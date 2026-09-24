@@ -1853,6 +1853,21 @@ body.guest-pointer-lock :is(webview, iframe) {
   padding-bottom: var(--composer-shell-pad-block-end);
 }
 
+/* An ordinary new chat has no transcript to read around: lift the existing
+   dock into the clear canvas. The sidebar remains outside this surface. Small
+   windows keep the bottom dock, and pop-out retains its own position. */
+@media (min-width: 900px) and (min-height: 640px) {
+  [data-chat-surface][data-fresh-draft] [data-slot='composer-dock']:not([data-popped-out]) {
+    bottom: min(31%, 30rem);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-chat-surface] [data-slot='composer-dock']:not([data-popped-out]) {
+    transition: bottom 180ms ease-out;
+  }
+}
+
 [data-slot='composer-root'] {
   width: 100%;
   padding-inline: 5px;

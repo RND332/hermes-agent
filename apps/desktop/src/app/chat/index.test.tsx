@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { assistantTextPart, type ChatMessage } from '@/lib/chat-messages'
+import { $introSplash } from '@/store/intro-splash'
 import {
   $activeSessionId,
   $awaitingResponse,
@@ -49,7 +50,13 @@ vi.mock('@/lib/model-options', () => ({
 }))
 vi.mock('./chat-drop-overlay', () => ({ ChatDropOverlay: () => null }))
 vi.mock('./chat-swap-overlay', () => ({ ChatSwapOverlay: () => null, ChatSyncBadge: () => null }))
-vi.mock('./composer', () => ({ ChatBar: () => null, ChatBarFallback: () => null }))
+vi.mock('./composer', async () => {
+  const React = await import('react')
+  return {
+    ChatBar: () => React.createElement('div', { 'data-slot': 'composer-dock' }, React.createElement('input', { 'data-testid': 'editor' })),
+    ChatBarFallback: () => null
+  }
+})
 vi.mock('./hooks/use-file-drop-zone', () => ({
   useFileDropZone: () => ({ dragKind: null, dropHandlers: {} })
 }))
@@ -72,9 +79,37 @@ function assistantMessage(id: string, text: string): ChatMessage {
   }
 }
 
+function chatProps() {
+  return {
+    gateway: null,
+    maxVoiceRecordingSeconds: 120,
+    onAddContextRef: vi.fn(),
+    onAddUrl: vi.fn(),
+    onAttachDroppedItems: vi.fn(),
+    onAttachImageBlob: vi.fn(),
+    onBranchInNewChat: vi.fn(),
+    onCancel: vi.fn(),
+    onDeleteSelectedSession: vi.fn(),
+    onEdit: vi.fn(),
+    onPasteClipboardImage: vi.fn(),
+    onPickFiles: vi.fn(),
+    onPickFolders: vi.fn(),
+    onPickImages: vi.fn(),
+    onReload: vi.fn(),
+    onRemoveAttachment: vi.fn(),
+    onRetryResume: vi.fn(),
+    onSteer: vi.fn(),
+    onSubmit: vi.fn(),
+    onThreadMessagesChange: vi.fn(),
+    onToggleSelectedPin: vi.fn(),
+    onTranscribeAudio: vi.fn()
+  }
+}
+
 describe('ChatView render isolation', () => {
   beforeEach(() => {
     threadRenderCount.current = 0
+    $introSplash.set(true)
     $activeSessionId.set('runtime-1')
     $awaitingResponse.set(false)
     $busy.set(false)
@@ -92,6 +127,7 @@ describe('ChatView render isolation', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
+    $introSplash.set(true)
     $activeSessionId.set(null)
     $awaitingResponse.set(false)
     $busy.set(false)
@@ -107,30 +143,7 @@ describe('ChatView render isolation', () => {
   })
 
   it('does not re-render chat history when an unrelated parent idle tick updates', () => {
-    const props = {
-      gateway: null,
-      maxVoiceRecordingSeconds: 120,
-      onAddContextRef: vi.fn(),
-      onAddUrl: vi.fn(),
-      onAttachDroppedItems: vi.fn(),
-      onAttachImageBlob: vi.fn(),
-      onBranchInNewChat: vi.fn(),
-      onCancel: vi.fn(),
-      onDeleteSelectedSession: vi.fn(),
-      onEdit: vi.fn(),
-      onPasteClipboardImage: vi.fn(),
-      onPickFiles: vi.fn(),
-      onPickFolders: vi.fn(),
-      onPickImages: vi.fn(),
-      onReload: vi.fn(),
-      onRemoveAttachment: vi.fn(),
-      onRetryResume: vi.fn(),
-      onSteer: vi.fn(),
-      onSubmit: vi.fn(),
-      onThreadMessagesChange: vi.fn(),
-      onToggleSelectedPin: vi.fn(),
-      onTranscribeAudio: vi.fn()
-    }
+    const props = chatProps()
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } }
@@ -161,5 +174,40 @@ describe('ChatView render isolation', () => {
     // memo(ChatView) with stable props must absorb the parent's idle tick —
     // the transcript (Thread) must not re-render. This is PR #38470's contract.
     expect(threadRenderCount.current).toBe(1)
+  })
+
+  it('marks an intro-free new chat and keeps its composer mounted when a session starts', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    act(() => {
+      $introSplash.set(false)
+      $activeSessionId.set(null)
+      $selectedStoredSessionId.set(null)
+      $sessions.set([])
+      $messages.set([])
+      $freshDraftReady.set(true)
+    })
+
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/']}>
+          <ChatView {...chatProps()} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+
+    const surface = container.querySelector('[data-chat-surface]')!
+    const editor = screen.getByTestId('editor')
+    expect(surface.hasAttribute('data-fresh-draft')).toBe(true)
+    expect(screen.getAllByTestId('editor')).toHaveLength(1)
+
+    act(() => {
+      $activeSessionId.set('runtime-2')
+      $selectedStoredSessionId.set('stored-2')
+      $sessions.set([{ id: 'stored-2', message_count: 1, title: 'Started' } as never])
+      $messages.set([assistantMessage('assistant-2', 'First answer')])
+    })
+
+    expect(surface.hasAttribute('data-fresh-draft')).toBe(false)
+    expect(screen.getByTestId('editor')).toBe(editor)
   })
 })
