@@ -2,10 +2,12 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import { useState } from 'react'
 import { host, useValue, Codicon, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@hermes/plugin-sdk'
 
-// Approved Paper artboard: 01M39Y6YEZK05Z9Z016ZB3DE9W / 1-0.
+// Approved Paper artboards: 01M39Y6YEZK05Z9Z016ZB3DE9W / 1-0 and 2K-0.
 // An explicit, opt-in visual palette, scoped to dark mode; never changes the selected skin.
-const fresh = 'html.dark.hermes-nocturne [data-chat-surface][data-fresh-draft]'
-const root = `${fresh} [data-slot="composer-root"]:not([data-popped-out]):not(.hud-native-drag)`
+const chat = 'html.dark.hermes-nocturne [data-chat-surface]'
+const fresh = `${chat}[data-fresh-draft]`
+const conversation = `${chat}:not([data-fresh-draft])`
+const root = `${chat} [data-slot="composer-root"]:not([data-popped-out]):not(.hud-native-drag)`
 const glyph = name => jsx(Codicon, { name, size: '16px' })
 const button = (props, children) => jsxs('button', { type: 'button', ...props, children })
 
@@ -43,8 +45,8 @@ function Title() {
 
 export default {
   id: 'nocturne',
-  name: 'Nocturne — Paper new chat',
-  description: 'Illustration-first new chat, expanded composer and quiet chrome. Keeps the native editor, controls and resize gestures.',
+  name: 'Nocturne — Paper chat',
+  description: 'Illustration-first new chat and quiet, readable conversations. Keeps native editing, tool disclosures and shared-column resizing.',
   register(ctx) {
     const html = document.documentElement
     const style = document.createElement('style')
@@ -97,7 +99,7 @@ export default {
       }
       ${root} [data-slot="composer-rich-input"] { padding-left: 0; font-size: 20px; line-height: 28px; color: var(--nocturne-text); }
       ${root} [data-slot="composer-rich-input"]::before { color: color-mix(in srgb, var(--nocturne-text) 70%, var(--nocturne-muted)); }
-      ${root} [data-slot="composer-rich-input"]:is(:empty,[data-empty])::after {
+      ${fresh} [data-slot="composer-root"]:not([data-popped-out]) [data-slot="composer-rich-input"]:is(:empty,[data-empty])::after {
         content: '/ for commands · @ for context'; position: absolute; top: 40px; left: 0; pointer-events: none;
         font-size: 13px; line-height: 20px; color: var(--nocturne-muted);
       }
@@ -110,7 +112,7 @@ export default {
       ${root} button.bg-foreground:disabled { opacity: .45; }
       ${root} .nocturne-settings { display: flex; align-items: center; justify-content: center; width: 28px; height: 32px; color: var(--nocturne-muted); cursor: pointer; }
       ${root} .nocturne-context { display: none; }
-      html.dark.hermes-nocturne [data-chat-surface][data-fresh-draft][data-composer-target="main"] [data-slot="composer-root"]:not([data-popped-out]) .nocturne-context {
+      html.dark.hermes-nocturne [data-chat-surface][data-composer-target="main"] [data-slot="composer-root"]:not([data-popped-out]) .nocturne-context {
         display: flex; position: absolute; left: 24px; bottom: calc(100% + 16px); gap: 18px; height: 26px; max-width: calc(100% - 48px); color: var(--nocturne-text); font-size: 14px;
       }
       .nocturne-context button { display: flex; min-width: 0; align-items: center; gap: 8px; cursor: pointer; }
@@ -118,7 +120,54 @@ export default {
       .nocturne-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
       .nocturne-divider { width: 1px; height: 14px; background: var(--nocturne-border); }
       .nocturne-title button:focus-visible, .nocturne-context button:focus-visible, .nocturne-settings:focus-visible { outline: 2px solid var(--nocturne-accent); outline-offset: 4px; }
+      /* The scrim belongs to this pane, never the wallpaper or another tile. */
+      ${conversation} {
+        --composer-width: 832px;
+        --conversation-text-font-size: 16px;
+        --message-text-indent: 0px;
+        --conversation-turn-gap: 28px;
+        --paragraph-gap: 16px;
+        --turn-block-gap: 24px;
+        --scaffold-block-gap: 8px;
+        --conversation-scaffold-text: #C6B9C9;
+        --conversation-scaffold-meta: #AEA0B3;
+        background: linear-gradient(180deg, #0C090F1F 0%, #0C090F14 60%, #0C090F 100%), linear-gradient(90deg, #0C090F6B 0%, #0C090FDE 20%, #0C090FF5 30%, #0C090FF5 73%, #0C090FCC 83%, #0C090F7A 100%) !important;
+      }
+      ${conversation} [data-slot="composer-bounds"] { background: transparent !important; }
+      ${conversation} [data-slot="composer-dock"]:not([data-popped-out]) { padding-top: 44px; padding-bottom: 24px; }
+      ${conversation} [data-slot="composer-root"]:not([data-popped-out]):not(.hud-native-drag) {
+        --composer-input-min-height: 24px;
+        --composer-input-max-height: min(25vh, 240px);
+        --composer-surface-pad-y: 16px;
+      }
+      ${conversation} [data-slot="composer-root"]:not([data-popped-out]):not(.hud-native-drag) [data-slot="composer-surface"] {
+        min-height: 120px; box-shadow: 0 12px 40px #00000033;
+      }
+      ${conversation} [data-slot="composer-root"]:not([data-popped-out]):not(.hud-native-drag) [data-slot="composer-rich-input"] { font-size: 17px; line-height: 24px; }
+      ${conversation} [data-slot="aui_thread-content"] { padding-top: 32px; }
+      ${conversation} [data-slot="aui_user-bubble-actions"] { width: min(100%, 590px); margin-left: auto; }
+      ${conversation} .composer-human-message {
+        background: #2B202D !important; border-color: #49374A !important;
+        border-radius: 16px 16px 5px 16px; padding: 20px 40px 20px 24px;
+        color: #F1E9EF; --human-msg-line-height: 1.625;
+      }
+      ${conversation} [data-slot="aui_assistant-message-content"] { color: #DED3DE; line-height: 27px; }
+      ${conversation} [data-slot="aui_assistant-message-content"] > .aui-md:not(.aui-md ~ .aui-md)::before {
+        content: 'Hermes'; display: block; color: var(--nocturne-accent); font-size: 14px; line-height: 22px; font-weight: 500; margin-bottom: 14px;
+      }
+      ${conversation} .aui-md h2 { font-size: 26px; line-height: 34px; font-weight: 500; letter-spacing: -.025em; color: #F1E9EF; }
+      ${conversation} .aui-md :is(p, li) { line-height: 27px; }
+      ${conversation} .aui-md a { color: var(--nocturne-accent); }
+      ${conversation} [data-conversation-scaffold] {
+        background: #19141E !important; border: 1px solid #39303E; border-radius: 10px;
+        padding: 10px 14px !important; opacity: 1 !important; color: var(--conversation-scaffold-text);
+      }
+      ${conversation} [data-conversation-scaffold] button[aria-expanded] { min-height: 22px; }
       @media (max-width: 720px) {
+        ${conversation} { background: #0C090FF0 !important; }
+        ${conversation} .composer-human-message { padding: 14px 32px 14px 16px; }
+        ${conversation} [data-slot="composer-dock"]:not([data-popped-out]) { padding-bottom: 8px; }
+
         .nocturne-wordmark, .nocturne-title .nocturne-new-chat { display: none; }
         ${root} { --composer-surface-pad-x: 16px; --composer-control-gap: 8px; }
         ${root} [data-slot="composer-rich-input"] { font-size: 17px; }

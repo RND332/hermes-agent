@@ -27,7 +27,7 @@ test('Paper new-chat composition preserves native editing and resizing', { timeo
   const app = await electron.launch({
     executablePath: process.env.HERMES_TEST_APP || join(root, 'apps/desktop/release/linux-unpacked/Hermes'),
     args: [`--user-data-dir=${join(dir, 'userdata')}`, '--disable-setuid-sandbox', '--ozone-platform=headless', '--disable-gpu'],
-    env: { ...process.env, HERMES_HOME: home, HERMES_DESKTOP_ISOLATED_BACKEND: '1' }, timeout: 60000
+    env: { ...process.env, HOME: dir, HERMES_REAL_HOME: dir, HERMES_HOME: home, HERMES_DESKTOP_ISOLATED_BACKEND: '1', HERMES_DESKTOP_SKIP_QUIT_CONFIRM: '1' }, timeout: 60000
   })
   try {
     const page = await app.firstWindow()
@@ -91,6 +91,7 @@ test('Paper new-chat composition preserves native editing and resizing', { timeo
     assert.match(await input.innerText(), /First line\s+Second line/)
     await page.reload()
     await input.waitFor({ state: 'visible', timeout: 45000 })
+    await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--hermes-composer-resize-width') !== '')
     assert.ok(Math.abs((await dock.boundingBox()).width - beforeResize.width + 120) < 2)
     await page.locator('[data-composer-resize="left"]').first().dblclick()
     await input.fill('')
@@ -120,14 +121,15 @@ test('Paper new-chat composition preserves native editing and resizing', { timeo
     await page.waitForTimeout(500)
     if (process.env.HERMES_TEST_WALLPAPER) await page.waitForFunction(() => document.querySelector('#hw-layer img')?.naturalWidth > 0)
     await page.screenshot({ path: join(dir, 'new-chat.png') })
-    // New-chat-only geometry must leave the native pop-out and normal thread alone.
+    // Pop-out stays native; a nonempty conversation switches to the compact composer.
     await page.locator(slot('composer-root')).first().evaluate(el => el.setAttribute('data-popped-out', ''))
     await page.waitForTimeout(250)
     assert.notEqual((await measure()).fill, layout.fill)
     await page.locator(slot('composer-root')).first().evaluate(el => el.removeAttribute('data-popped-out'))
     await page.locator('[data-chat-surface]').first().evaluate(el => el.removeAttribute('data-fresh-draft'))
     await page.waitForTimeout(250)
-    assert.notEqual((await measure()).fill, layout.fill)
+    assert.equal((await measure()).fill, layout.fill)
+    assert.ok((await measure()).height < layout.height)
     await page.locator('[data-chat-surface]').first().evaluate(el => el.setAttribute('data-fresh-draft', ''))
     await page.evaluate(() => localStorage.setItem('hermes-desktop-mode-v1', 'light'))
     await page.reload()
@@ -142,5 +144,15 @@ test('Paper new-chat composition preserves native editing and resizing', { timeo
     assert.equal(await page.locator('.nocturne-context, .nocturne-title').count(), 0, 'Uninstall removes contributed controls')
     assert.equal(await page.evaluate(() => document.documentElement.classList.contains('hermes-nocturne')), false)
     console.log('PASS: composition, native editing, resize, persistence, model menu, narrow layout')
-  } finally { await app.close() }
+  } finally {
+    // Same bounded teardown as conversation.test.mjs.
+    const closed = app.close().then(() => 'closed', () => 'close-failed')
+    await Promise.race([
+      closed,
+      new Promise(resolve => setTimeout(() => {
+        try { app.process().kill('SIGKILL') } catch {}
+        resolve('force-killed')
+      }, 10000))
+    ])
+  }
 })
